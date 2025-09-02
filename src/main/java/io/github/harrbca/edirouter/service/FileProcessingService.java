@@ -3,6 +3,9 @@ package io.github.harrbca.edirouter.service;
 
 import io.github.harrbca.edirouter.config.FileMonitorProperties;
 import io.github.harrbca.edirouter.event.FileProcessedEvent;
+import io.github.harrbca.edirouter.x12.X12EnvelopeService;
+import io.github.harrbca.edirouter.x12.model.TransactionSet;
+import io.github.harrbca.edirouter.x12.model.X12ParseResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -24,6 +27,7 @@ public class FileProcessingService {
 
     private final FileMonitorProperties properties;
     private final ApplicationEventPublisher eventPublisher;
+    private final X12EnvelopeService x12EnvelopeService;
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
     
     private volatile long totalFilesProcessed = 0;
@@ -37,9 +41,15 @@ public class FileProcessingService {
             log.info("Started processing file {}", fileName);
             Path processingFile = moveToProcessingDirectory(sourceFile);
 
-            // TODO: Add actual file content processing here
-            // For now, just simulate successful processing
-            //Thread.sleep(100); // Simulate processing time
+            // extract the envelope info and log it
+            X12ParseResult parseResult = x12EnvelopeService.parse(processingFile);
+            String type = parseResult.getFunctionalGroups().stream()
+                    .flatMap(g -> g.getTransactionSets().stream())
+                    .findFirst()
+                    .map(TransactionSet::getTransactionSetIdentifierCode)
+                    .orElse("UNKNOWN");
+            log.info("Processed file {}, Type: {}, Sender: {}, Receiver: {}", fileName, type, parseResult.getIsa().getInterchangeSenderId(), parseResult.getIsa().getInterchangeReceiverId());
+
             
             moveToArchiveDirectory(processingFile);
             log.info("Successfully processed file {}", fileName);
